@@ -106,6 +106,7 @@ io.on("connection", (socket) => {
       name: name || "Host",
       User_Veto_Button: false,
       completion_status: "IN_PROGRESS",
+      Voted_Movies: {}, // { [movieId]: "RIGHT" | "LEFT" } - lets a user safely re-swipe (e.g. "Swipe again") without inflating the group score
     });
     socket.join(Room_Code);
     cb({ success: true, Room_Code, userId, isHost: true });
@@ -127,6 +128,7 @@ io.on("connection", (socket) => {
       name: name || "Guest",
       User_Veto_Button: false,
       completion_status: "IN_PROGRESS",
+      Voted_Movies: {},
     });
     socket.join(Input_Code);
     cb({
@@ -148,19 +150,29 @@ io.on("connection", (socket) => {
   });
 
   // ---- ProcessSwipe: RIGHT / LEFT ----
-  socket.on("user_swipe", ({ Room_Code, movieId, User_Action }) => {
+  socket.on("user_swipe", ({ Room_Code, userId, movieId, User_Action }) => {
     const room = Active_Session_Table[Room_Code];
     if (!room) return;
     const Movie_Object = room.Filtered_Array.find((m) => m.id === movieId);
-    if (!Movie_Object || Movie_Object.Movie_Status === "EXCLUDED") return;
+    const User = room.Session_Active_Array.find((u) => u.userId === userId);
+    if (!Movie_Object || !User || Movie_Object.Movie_Status === "EXCLUDED") return;
+    if (User_Action !== "RIGHT" && User_Action !== "LEFT") return;
 
-    if (User_Action === "RIGHT") {
-      Movie_Object.Current_Score = Movie_Object.Current_Score + 1;
-      BroadcastLiveUpdate(Room_Code, "SCORE_UPDATE", Movie_Object);
-    } else if (User_Action === "LEFT") {
-      Movie_Object.Current_Score = Movie_Object.Current_Score - 1;
-      BroadcastLiveUpdate(Room_Code, "SCORE_UPDATE", Movie_Object);
+    const delta = (action) => (action === "RIGHT" ? 1 : -1);
+    const previousVote = User.Voted_Movies[movieId];
+
+    if (previousVote === User_Action) {
+      // Same user, same title, same direction (e.g. after "Swipe again") - no-op.
+      return;
     }
+    if (previousVote) {
+      // User is changing their mind on this title - undo their old contribution first.
+      Movie_Object.Current_Score -= delta(previousVote);
+    }
+    Movie_Object.Current_Score += delta(User_Action);
+    User.Voted_Movies[movieId] = User_Action;
+
+    BroadcastLiveUpdate(Room_Code, "SCORE_UPDATE", Movie_Object);
   });
 
   // ---- ProcessSwipe: VETO_BUTTON_TAPPED branch (two-step, post-confirmation) ----
@@ -197,21 +209,32 @@ io.on("connection", (socket) => {
     BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
   });
 
+  // ---- Leave room (explicit, via the Leave button) ----
+  socket.on("leave_room", ({ Room_Code }) => {
+    removeSocketFromRoom(socket, Room_Code);
+    socket.leave(Room_Code);
+  });
+
   socket.on("disconnect", () => {
     for (const Room_Code of Object.keys(Active_Session_Table)) {
-      const room = Active_Session_Table[Room_Code];
-      const before = room.Session_Active_Array.length;
-      room.Session_Active_Array = room.Session_Active_Array.filter(
-        (u) => u.socketId !== socket.id
-      );
-      if (room.Session_Active_Array.length !== before) {
-        BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
-      }
-      if (room.Session_Active_Array.length === 0) {
-        delete Active_Session_Table[Room_Code];
-      }
+      removeSocketFromRoom(socket, Room_Code);
     }
   });
+
+  function removeSocketFromRoom(socket, Room_Code) {
+    const room = Active_Session_Table[Room_Code];
+    if (!room) return;
+    const before = room.Session_Active_Array.length;
+    room.Session_Active_Array = room.Session_Active_Array.filter(
+      (u) => u.socketId !== socket.id
+    );
+    if (room.Session_Active_Array.length !== before) {
+      BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
+    }
+    if (room.Session_Active_Array.length === 0) {
+      delete Active_Session_Table[Room_Code];
+    }
+  }
 });
 
 app.get("/health", (req, res) => res.json({ ok: true }));

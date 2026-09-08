@@ -5,10 +5,11 @@ const SWIPE_THRESHOLD_X = 100;
 const VETO_THRESHOLD_Y = 90;
 const EXIT_DURATION = 260;
 
-export default function SwipeDeck({ session, Filtered_Array, synced, onFinished }) {
+export default function SwipeDeck({ session, Filtered_Array, synced, onFinished, onLeave }) {
   const active = Filtered_Array.filter((m) => m.Movie_Status !== "EXCLUDED");
   const [index, setIndex] = useState(0);
   const [showVetoModal, setShowVetoModal] = useState(false);
+  const [showParty, setShowParty] = useState(false);
   const [vetoError, setVetoError] = useState("");
 
   // Drag + animation state
@@ -38,6 +39,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
         // ProcessSwipe: RIGHT / LEFT
         socket.emit("user_swipe", {
           Room_Code: session.Room_Code,
+          userId: session.userId,
           movieId: current.id,
           User_Action,
         });
@@ -79,7 +81,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
   // ---- Keyboard support: Left = Pass, Right = Like, Down = Veto ----
   useEffect(() => {
     function onKeyDown(e) {
-      if (showVetoModal) return; // let the modal own the keyboard while open
+      if (showVetoModal || showParty) return; // let overlays own the keyboard while open
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         handleSwipe("LEFT");
@@ -93,7 +95,23 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [current, exitAnim, showVetoModal]);
+  }, [current, exitAnim, showVetoModal, showParty]);
+
+  // Veto modal keyboard support: Escape = cancel, Enter = confirm
+  useEffect(() => {
+    if (!showVetoModal) return;
+    function onModalKeyDown(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        resolveVeto(false);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        resolveVeto(true);
+      }
+    }
+    window.addEventListener("keydown", onModalKeyDown);
+    return () => window.removeEventListener("keydown", onModalKeyDown);
+  }, [showVetoModal]);
 
   // ---- Drag gesture handlers (mouse + touch, via the Pointer Events API) ----
   function onPointerDown(e) {
@@ -124,27 +142,44 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
     }
   }
 
-  // Veto modal keyboard support: Escape = cancel, Enter = confirm
-  useEffect(() => {
-    if (!showVetoModal) return;
-    function onModalKeyDown(e) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        resolveVeto(false);
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        resolveVeto(true);
-      }
-    }
-    window.addEventListener("keydown", onModalKeyDown);
-    return () => window.removeEventListener("keydown", onModalKeyDown);
-  }, [showVetoModal]);
+  const partyCount = session.Session_Active_Array.length;
+
+  const topBar = (
+    <div className="top_bar">
+      <div className="top_bar_left">
+        <button className="btn_view_party" onClick={() => setShowParty(true)}>
+          View party <span className="party_count">{partyCount}</span>
+        </button>
+        <span className="badge_sync_status">
+          <span className="dot" style={{ opacity: synced ? 1 : 0.3 }} /> {synced ? "Syncing" : "Synced"}
+        </span>
+      </div>
+      <button className="btn_leave_room" onClick={onLeave}>Leave</button>
+    </div>
+  );
+
+  const partyPopover = showParty && (
+    <div className="party_popover_backdrop" onClick={() => setShowParty(false)}>
+      <div className="party_popover" onClick={(e) => e.stopPropagation()}>
+        <h4>Who's in this room</h4>
+        {session.Session_Active_Array.map((u) => (
+          <div className="party_member_row" key={u.userId}>
+            <span className="party_member_dot" />
+            <span>{u.name}</span>
+            {u.userId === session.userId && <span className="party_member_you">you</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   if (!current) {
     return (
       <div className="screen">
+        {topBar}
         <h1 className="screen_title">Swipe deck</h1>
         <p className="screen_subtitle">No titles match the current filters.</p>
+        {partyPopover}
       </div>
     );
   }
@@ -158,6 +193,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
     : {
         transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x / 18}deg)`,
         transition: drag.dragging ? "none" : "transform 200ms ease",
+        background: current.posterUrl ? `url(${current.posterUrl}) center/cover` : undefined,
       };
 
   const cardClassName =
@@ -167,12 +203,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
 
   return (
     <div className="screen">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 className="screen_title">Swipe deck</h1>
-        <span className="badge_sync_status">
-          <span className="dot" style={{ opacity: synced ? 1 : 0.3 }} /> {synced ? "Syncing..." : "Synced"}
-        </span>
-      </div>
+      {topBar}
 
       <div className="card_movie_stage">
         <div
@@ -184,32 +215,51 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
+          {!current.posterUrl && (
+            <div className="card_movie_art" style={{ background: current.gradient }}>
+              {current.poster}
+            </div>
+          )}
+
           <span className="card_stamp card_stamp_like" style={{ opacity: likeOpacity }}>LIKE</span>
           <span className="card_stamp card_stamp_pass" style={{ opacity: passOpacity }}>PASS</span>
           <span className="card_stamp card_stamp_veto" style={{ opacity: vetoOpacity }}>VETO</span>
 
-          <div className="card_movie_poster">{current.poster}</div>
-          <p className="lbl_movie_title">{current.title}</p>
-          <p className="card_movie_meta">{current.duration} min &middot; {current.available_platforms.join(", ")}</p>
+          <div className="card_movie_scrim">
+            <p className="lbl_movie_title">{current.title}</p>
+            <p className="card_movie_meta">
+              {current.duration} min &middot; {current.available_platforms.join(", ")}
+            </p>
+            {current.description && (
+              <p className="card_movie_description">{current.description}</p>
+            )}
+            {current.genres && current.genres.length > 0 && (
+              <div className="card_genre_row">
+                {current.genres.map((g) => (
+                  <span className="card_genre_tag" key={g}>{g}</span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {vetoError && <p className="lbl_veto_error">{vetoError}</p>}
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn_swipe_pass" onClick={() => handleSwipe("LEFT")}>
-          &larr; Pass
+      <div className="swipe_actions">
+        <button className="btn_circle btn_swipe_pass" onClick={() => handleSwipe("LEFT")} aria-label="Pass">
+          &#10005;
         </button>
-        <button className="btn btn_veto" onClick={tapVeto}>
-          Veto
+        <button className="btn_circle btn_veto" onClick={tapVeto} aria-label="Veto">
+          &#9873;
         </button>
-        <button className="btn btn_swipe_like" onClick={() => handleSwipe("RIGHT")}>
-          Like &rarr;
+        <button className="btn_circle btn_swipe_like" onClick={() => handleSwipe("RIGHT")} aria-label="Like">
+          &#9829;
         </button>
       </div>
 
       <p className="screen_subtitle" style={{ textAlign: "center" }}>
-        {index + 1} of {active.length} &middot; drag, use the buttons, or press &larr; / &rarr; / &darr;
+        {index + 1} of {active.length} &middot; drag, tap, or press &larr; / &rarr; / &darr;
       </p>
 
       {showVetoModal && (
@@ -230,6 +280,8 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished 
           </div>
         </div>
       )}
+
+      {partyPopover}
     </div>
   );
 }

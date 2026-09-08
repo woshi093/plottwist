@@ -3,7 +3,7 @@ import { socket } from "../socket.js";
 
 const ALL_PLATFORMS = ["Netflix", "Disney+", "Prime Video"];
 
-export default function RoomLobby({ session, synced }) {
+export default function RoomLobby({ session, synced, onLeave }) {
   const [maxDuration, setMaxDuration] = useState(150);
   const [platforms, setPlatforms] = useState([...ALL_PLATFORMS]);
   const [starting, setStarting] = useState(false);
@@ -25,19 +25,23 @@ export default function RoomLobby({ session, synced }) {
 
   return (
     <div className="screen">
-      <h1 className="screen_title">Room lobby</h1>
-      <span className="badge_sync_status">
-        <span className="dot" style={{ opacity: synced ? 1 : 0.3 }} /> {synced ? "Syncing..." : "Synced"}
-      </span>
+      <div className="top_bar">
+        <span className="badge_sync_status">
+          <span className="dot" style={{ opacity: synced ? 1 : 0.3 }} /> {synced ? "Syncing..." : "Synced"}
+        </span>
+        <button className="btn_leave_room" onClick={onLeave}>Leave room</button>
+      </div>
 
-      <p className="screen_subtitle">Room code</p>
+      <h1 className="screen_title">Room lobby</h1>
+
+      <p className="screen_subtitle" style={{ marginBottom: -4 }}>Room code</p>
       <p className="lbl_room_code">{session.Room_Code}</p>
 
       <div className="lobby_user_list">
         {session.Session_Active_Array.map((u) => (
           <div className="lobby_user_row" key={u.userId}>
             <span>{u.name}</span>
-            <span style={{ color: "var(--text-secondary)" }}>
+            <span style={{ color: "var(--text-faint)", fontSize: 12 }}>
               {u.userId === session.userId ? "(you)" : ""}
             </span>
           </div>
@@ -60,21 +64,23 @@ export default function RoomLobby({ session, synced }) {
             onChange={(e) => setMaxDuration(Number(e.target.value))}
           />
 
-          <p className="screen_subtitle">Platforms</p>
-          {ALL_PLATFORMS.map((p) => (
-            <label className="chk_filter_platform_row" key={p}>
-              <input
-                type="checkbox"
-                className="chk_filter_platform"
-                checked={platforms.includes(p)}
-                onChange={() => togglePlatform(p)}
-              />
-              {p}
-            </label>
-          ))}
+          <p className="screen_subtitle" style={{ marginBottom: -2 }}>Platforms</p>
+          <div className="filter_chip_row">
+            {ALL_PLATFORMS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className={"filter_chip chk_filter_platform" + (platforms.includes(p) ? " active" : "")}
+                onClick={() => togglePlatform(p)}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
 
           <button
             className="btn btn_primary"
+            style={{ marginTop: 8 }}
             onClick={handleStart}
             disabled={starting || platforms.length === 0}
           >

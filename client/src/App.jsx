@@ -5,16 +5,18 @@ import RoomLobby from "./screens/RoomLobby.jsx";
 import SwipeDeck from "./screens/SwipeDeck.jsx";
 import ResultsDashboard from "./screens/ResultsDashboard.jsx";
 
+const EMPTY_SESSION = {
+  Room_Code: null,
+  userId: null,
+  isHost: false,
+  Session_Active_Array: [],
+};
+
 // Screens follow the Final Master Site Map (hybrid):
 // join_create -> lobby -> swipe -> results
 export default function App() {
   const [screen, setScreen] = useState("join_create");
-  const [session, setSession] = useState({
-    Room_Code: null,
-    userId: null,
-    isHost: false,
-    Session_Active_Array: [],
-  });
+  const [session, setSession] = useState(EMPTY_SESSION);
   const [Filtered_Array, setFilteredArray] = useState([]);
   const [synced, setSynced] = useState(false);
 
@@ -56,6 +58,19 @@ export default function App() {
     };
   }, []);
 
+  function handleLeave() {
+    if (session.Room_Code) {
+      socket.emit("leave_room", { Room_Code: session.Room_Code });
+    }
+    setSession(EMPTY_SESSION);
+    setFilteredArray([]);
+    setScreen("join_create");
+  }
+
+  function handleSwipeAgain() {
+    setScreen("swipe"); // SwipeDeck remounts, its local index resets to 0
+  }
+
   return (
     <div className="app_shell">
       {screen === "join_create" && (
@@ -70,6 +85,7 @@ export default function App() {
         <RoomLobby
           session={session}
           synced={synced}
+          onLeave={handleLeave}
           onFiltersSet={() => {
             /* CATALOGUE_READY event advances the screen */
           }}
@@ -81,10 +97,17 @@ export default function App() {
           Filtered_Array={Filtered_Array}
           synced={synced}
           onFinished={() => setScreen("results")}
+          onLeave={handleLeave}
         />
       )}
       {screen === "results" && (
-        <ResultsDashboard Filtered_Array={Filtered_Array} synced={synced} />
+        <ResultsDashboard
+          session={session}
+          Filtered_Array={Filtered_Array}
+          synced={synced}
+          onSwipeAgain={handleSwipeAgain}
+          onLeave={handleLeave}
+        />
       )}
     </div>
   );

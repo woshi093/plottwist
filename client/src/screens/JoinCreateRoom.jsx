@@ -47,13 +47,16 @@ export default function JoinCreateRoom({ onJoined }) {
   }
 
   return (
-    <div className="screen">
-      <h1 className="screen_title">PlotTwist</h1>
-      <p className="screen_subtitle">Cooperative group media consensus</p>
+    <div className="screen" style={{ justifyContent: "center", gap: 18 }}>
+      <div style={{ textAlign: "center", marginBottom: 8 }}>
+        <p className="wordmark">PlotTwist</p>
+        <p className="screen_subtitle" style={{ margin: "6px 0 0" }}>
+          Pick something together, tonight.
+        </p>
+      </div>
 
       <input
         className="txt_name_input"
-        style={{ padding: 10, borderRadius: 10, border: "1px solid var(--border)", fontSize: 14 }}
         placeholder="Your name"
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -61,14 +64,18 @@ export default function JoinCreateRoom({ onJoined }) {
       />
 
       {mode !== "join" && (
-        <button className="btn btn_primary btn_create_room" onClick={() => (mode === "create" ? handleCreate() : setMode("create"))} disabled={loading}>
+        <button
+          className="btn btn_primary btn_create_room"
+          onClick={() => (mode === "create" ? handleCreate() : setMode("create"))}
+          disabled={loading}
+        >
           {mode === "create" ? (loading ? "Creating..." : "Confirm - Create room") : "Create room"}
         </button>
       )}
 
       {mode !== "create" && (
         <>
-          <button className="btn btn_join_room" onClick={() => setMode("join")}>
+          <button className="btn btn_secondary btn_join_room" onClick={() => setMode("join")}>
             Join room
           </button>
           {mode === "join" && (
@@ -90,7 +97,7 @@ export default function JoinCreateRoom({ onJoined }) {
       )}
 
       {error && <p className="lbl_veto_error">{error}</p>}
-      <p className="screen_subtitle" style={{ marginTop: "auto" }}>
+      <p className="screen_subtitle" style={{ textAlign: "center", marginTop: 12 }}>
         Room codes are 4 digits (1000-9999) and checked for uniqueness.
       </p>
     </div>
