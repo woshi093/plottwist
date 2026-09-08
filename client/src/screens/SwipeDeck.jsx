@@ -1,117 +1,218 @@
-import React, { useState } from "react";
-import { socket } from "../socket.js";
-
-export default function SwipeDeck({ session, Filtered_Array, synced, onFinished }) {
-  const active = Filtered_Array.filter((m) => m.Movie_Status !== "EXCLUDED");
-  const [index, setIndex] = useState(0);
-  const [showVetoModal, setShowVetoModal] = useState(false);
-  const [vetoError, setVetoError] = useState("");
-
-  const current = active[index];
-
-  function advance() {
-    setVetoError("");
-    if (index + 1 >= active.length) {
-      socket.emit("user_finished", { Room_Code: session.Room_Code, userId: session.userId });
-      onFinished();
-    } else {
-      setIndex(index + 1);
-    }
-  }
-
-  function handleSwipe(User_Action) {
-    // ProcessSwipe: RIGHT / LEFT
-    socket.emit("user_swipe", {
-      Room_Code: session.Room_Code,
-      movieId: current.id,
-      User_Action,
-    });
-    advance();
-  }
-
-  // btn_veto - step 1 of the two-step veto (opens modal_veto_confirm)
-  function tapVeto() {
-    setShowVetoModal(true);
-  }
-
-  // btn_veto_confirm / btn_veto_cancel - step 2 of the two-step veto
-  function resolveVeto(Confirmed) {
-    setShowVetoModal(false);
-    if (!Confirmed) return; // DISPLAY "Veto cancelled" - no state change
-
-    socket.emit(
-      "veto_confirm",
-      { Room_Code: session.Room_Code, userId: session.userId, movieId: current.id, Confirmed: true },
-      (res) => {
-        if (res.status === "BLOCKED") {
-          setVetoError(res.message); // lbl_veto_error
-        } else if (res.status === "EXCLUDED") {
-          advance();
-        }
-      }
-    );
-  }
-
-  if (!current) {
-    return (
-      <div className="screen">
-        <h1 className="screen_title">Swipe deck</h1>
-        <p className="screen_subtitle">No titles match the current filters.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="screen">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 className="screen_title">Swipe deck</h1>
-        <span className="badge_sync_status">
-          <span className="dot" style={{ opacity: synced ? 1 : 0.3 }} /> {synced ? "Syncing..." : "Synced"}
-        </span>
-      </div>
-
-      <div className="card_movie">
-        <div className="card_movie_poster">{current.poster}</div>
-        <p className="lbl_movie_title">{current.title}</p>
-        <p className="card_movie_meta">{current.duration} min &middot; {current.available_platforms.join(", ")}</p>
-      </div>
-
-      {vetoError && <p className="lbl_veto_error">{vetoError}</p>}
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn_swipe_pass" onClick={() => handleSwipe("LEFT")}>
-          &larr; Pass
-        </button>
-        <button className="btn btn_veto" onClick={tapVeto}>
-          Veto
-        </button>
-        <button className="btn btn_swipe_like" onClick={() => handleSwipe("RIGHT")}>
-          Like &rarr;
-        </button>
-      </div>
-
-      <p className="screen_subtitle" style={{ textAlign: "center" }}>
-        {index + 1} of {active.length}
-      </p>
-
-      {showVetoModal && (
-        <div className="modal_veto_confirm_backdrop">
-          <div className="modal_veto_confirm">
-            <h3>Veto this title?</h3>
-            <p>
-              This uses your one veto for the session. {current.title} will be removed for everyone.
-            </p>
-            <div className="modal_veto_confirm_actions">
-              <button className="btn btn_veto_cancel" onClick={() => resolveVeto(false)}>
-                Cancel
-              </button>
-              <button className="btn btn_veto_confirm" onClick={() => resolveVeto(true)}>
-                Confirm veto
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+:root {
+  --primary: #5B4FE0;
+  --primary-dark: #2F2A78;
+  --success: #22C55E;
+  --danger: #DC2626;
+  --warning: #F59E0B;
+  --text: #1F2937;
+  --text-secondary: #6B7280;
+  --surface: #FFFFFF;
+  --surface-muted: #F3F4F6;
+  --border: #E5E7EB;
 }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Inter", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.app_shell {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(0,0,0,0.06);
+}
+
+.screen {
+  flex: 1;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.screen_title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+
+.screen_subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: -8px 0 4px;
+}
+
+/* ---- Buttons ---- */
+.btn {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 16px;
+  transition: transform 0.05s ease, background 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn_primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.btn_create_room, .btn_join_room { width: 100%; }
+
+.btn_swipe_pass, .btn_swipe_like, .btn_veto {
+  flex: 1;
+  font-size: 15px;
+}
+.btn_swipe_like { border-color: var(--success); color: var(--success); }
+.btn_swipe_pass { border-color: var(--text-secondary); color: var(--text-secondary); }
+.btn_veto { border-color: var(--danger); color: var(--danger); }
+
+.btn_veto_confirm { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn_veto_cancel { background: var(--surface); }
+
+/* ---- Inputs ---- */
+.txt_room_code_input {
+  font-family: inherit;
+  font-size: 22px;
+  letter-spacing: 4px;
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  width: 100%;
+}
+
+.sld_filter_duration { width: 100%; }
+.chk_filter_platform_row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+
+/* ---- Labels / text ---- */
+.lbl_room_code { font-size: 28px; font-weight: 700; letter-spacing: 4px; color: var(--primary-dark); }
+.lbl_movie_title { font-size: 16px; font-weight: 600; margin: 0; }
+.lbl_veto_error { color: var(--danger); font-size: 12px; font-weight: 600; }
+.lbl_result_score { font-size: 13px; color: var(--text-secondary); font-weight: 600; }
+
+/* ---- Cards ---- */
+.card_movie_stage {
+  position: relative;
+  min-height: 240px;
+}
+
+.card_movie {
+  position: relative;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  will-change: transform, opacity;
+  animation: card_enter 220ms ease-out;
+}
+
+.card_movie.card_dragging {
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.card_movie.card_exit_left {
+  transition: transform 260ms ease-in, opacity 260ms ease-in;
+  transform: translate(-140%, -10px) rotate(-18deg);
+  opacity: 0;
+}
+.card_movie.card_exit_right {
+  transition: transform 260ms ease-in, opacity 260ms ease-in;
+  transform: translate(140%, -10px) rotate(18deg);
+  opacity: 0;
+}
+.card_movie.card_exit_down {
+  transition: transform 260ms ease-in, opacity 260ms ease-in;
+  transform: translate(0, 90px) scale(0.85);
+  opacity: 0;
+}
+
+@keyframes card_enter {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.card_stamp {
+  position: absolute;
+  top: 16px;
+  z-index: 2;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 2px solid currentColor;
+  pointer-events: none;
+}
+.card_stamp_like { left: 16px; color: var(--success); transform: rotate(-12deg); }
+.card_stamp_pass { right: 16px; color: var(--text-secondary); transform: rotate(12deg); }
+.card_stamp_veto {
+  left: 50%; top: 16px; transform: translateX(-50%);
+  color: var(--danger);
+}
+.card_movie_poster {
+  font-size: 64px;
+  text-align: center;
+  padding: 24px 0;
+  background: var(--surface);
+  border-radius: 10px;
+}
+.card_movie_meta { font-size: 12px; color: var(--text-secondary); }
+
+/* ---- Modal ---- */
+.modal_veto_confirm_backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.modal_veto_confirm {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 20px;
+  max-width: 340px;
+  width: 100%;
+}
+.modal_veto_confirm h3 { margin: 0 0 8px; color: var(--danger); font-size: 16px; }
+.modal_veto_confirm p { margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
+.modal_veto_confirm_actions { display: flex; gap: 8px; }
+
+/* ---- Results ---- */
+.list_results_ranked { display: flex; flex-direction: column; gap: 8px; }
+.result_row {
+  display: flex; justify-content: space-between; align-items: center;
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+}
+.result_row.excluded { opacity: 0.55; text-decoration: line-through; }
+.result_row.top { border-color: var(--success); background: #F0FDF4; }
+
+/* ---- Sync badge ---- */
+.badge_sync_status {
+  font-size: 11px; color: var(--text-secondary);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.badge_sync_status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+.lobby_user_list { display: flex; flex-direction: column; gap: 6px; }
+.lobby_user_row { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
