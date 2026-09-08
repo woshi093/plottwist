@@ -108,7 +108,13 @@ body {
 .lbl_result_score { font-size: 13px; color: var(--text-secondary); font-weight: 600; }
 
 /* ---- Cards ---- */
+.card_movie_stage {
+  position: relative;
+  min-height: 240px;
+}
+
 .card_movie {
+  position: relative;
   background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -116,6 +122,56 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  will-change: transform, opacity;
+  animation: card_enter 220ms ease-out;
+}
+
+.card_movie.card_dragging {
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.card_movie.card_exit_left {
+  transition: transform 260ms ease-in, opacity 260ms ease-in;
+  transform: translate(-140%, -10px) rotate(-18deg);
+  opacity: 0;
+}
+.card_movie.card_exit_right {
+  transition: transform 260ms ease-in, opacity 260ms ease-in;
+  transform: translate(140%, -10px) rotate(18deg);
+  opacity: 0;
+}
+.card_movie.card_exit_down {
+  transition: transform 260ms ease-in, opacity 260ms ease-in;
+  transform: translate(0, 90px) scale(0.85);
+  opacity: 0;
+}
+
+@keyframes card_enter {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.card_stamp {
+  position: absolute;
+  top: 16px;
+  z-index: 2;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 2px solid currentColor;
+  pointer-events: none;
+}
+.card_stamp_like { left: 16px; color: var(--success); transform: rotate(-12deg); }
+.card_stamp_pass { right: 16px; color: var(--text-secondary); transform: rotate(12deg); }
+.card_stamp_veto {
+  left: 50%; top: 16px; transform: translateX(-50%);
+  color: var(--danger);
 }
 .card_movie_poster {
   font-size: 64px;
