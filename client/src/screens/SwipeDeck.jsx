@@ -193,7 +193,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
     : {
         transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x / 18}deg)`,
         transition: drag.dragging ? "none" : "transform 200ms ease",
-        background: current.posterUrl ? `url(${current.posterUrl}) center/cover` : undefined,
+        background: current.posterUrl ? `url(${current.posterUrl}) center top/cover` : undefined,
       };
 
   const cardClassName =

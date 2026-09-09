@@ -100,6 +100,9 @@ export default function JoinCreateRoom({ onJoined }) {
       <p className="screen_subtitle" style={{ textAlign: "center", marginTop: 12 }}>
         Room codes are 4 digits (1000-9999) and checked for uniqueness.
       </p>
+      <p className="screen_subtitle" style={{ textAlign: "center", fontSize: 10, opacity: 0.7 }}>
+        Movie data provided by TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.
+      </p>
     </div>
   );
 }

@@ -267,6 +267,7 @@ body {
 /* ---- Cards: full-bleed poster style ---- */
 .card_movie_stage {
   position: relative;
+  aspect-ratio: 2 / 3;
   min-height: 420px;
 }
 
@@ -274,6 +275,7 @@ body {
   position: relative;
   border-radius: var(--radius-lg);
   overflow: hidden;
+  aspect-ratio: 2 / 3;
   min-height: 420px;
   display: flex;
   flex-direction: column;
