@@ -1,8 +1,10 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-const { Master_Catalogue } = require("./catalogue");
+const { Master_Catalogue: SEED_CATALOGUE } = require("./catalogue");
+const { buildCatalogueFromTMDB } = require("./tmdb");
 
 const app = express();
 app.use(cors());
@@ -10,6 +12,22 @@ app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
+
+// Master_Catalogue starts as the static seed list, and is replaced with real
+// TMDB data at startup if TMDB_API_KEY is set and the request succeeds.
+// FilterCatalogue() below reads this variable by reference, so the
+// replacement takes effect automatically once initCatalogue() resolves.
+let Master_Catalogue = SEED_CATALOGUE;
+
+async function initCatalogue() {
+  try {
+    Master_Catalogue = await buildCatalogueFromTMDB();
+    console.log(`Loaded ${Master_Catalogue.length} titles from TMDB.`);
+  } catch (err) {
+    console.warn(`TMDB catalogue unavailable (${err.message}) - using the built-in seed catalogue instead.`);
+    Master_Catalogue = SEED_CATALOGUE;
+  }
+}
 
 // Active_Session_Table: { [Room_Code]: RoomState }
 // RoomState = {
@@ -240,4 +258,6 @@ io.on("connection", (socket) => {
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`PlotTwist server listening on :${PORT}`));
+initCatalogue().then(() => {
+  server.listen(PORT, () => console.log(`PlotTwist server listening on :${PORT}`));
+});
