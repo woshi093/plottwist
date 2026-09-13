@@ -3,6 +3,7 @@ import { socket } from "./socket.js";
 import JoinCreateRoom from "./screens/JoinCreateRoom.jsx";
 import RoomLobby from "./screens/RoomLobby.jsx";
 import SwipeDeck from "./screens/SwipeDeck.jsx";
+import TiebreakDeck from "./screens/TiebreakDeck.jsx";
 import ResultsDashboard from "./screens/ResultsDashboard.jsx";
 import SidePanel from "./screens/SidePanel.jsx";
 import { useIsDesktop } from "./useIsDesktop.js";
@@ -24,6 +25,8 @@ export default function App() {
   const [Filtered_Array, setFilteredArray] = useState([]);
   const [synced, setSynced] = useState(false);
   const [myVotedIds, setMyVotedIds] = useState([]);
+  const [tiebreakIds, setTiebreakIds] = useState([]);
+  const [tieInfo, setTieInfo] = useState({ tie: false, tiedMovieIds: [] });
   const isDesktop = useIsDesktop();
   const waking = useServerWaking();
 
@@ -90,6 +93,14 @@ export default function App() {
       setSession((prev) => ({ ...prev, Session_Active_Array: roomState.Session_Active_Array }));
       pulseSync();
     }
+    function onTiebreakRound({ tiedMovieIds }) {
+      setTiebreakIds(tiedMovieIds);
+      setScreen("tiebreak"); // pulls everyone here, even those already on Results
+    }
+    function onSessionComplete({ tie, tiedMovieIds }) {
+      setTieInfo({ tie, tiedMovieIds });
+      setScreen("results"); // harmless if already there; matters when coming from a tiebreak
+    }
     function pulseSync() {
       setSynced(true);
       setTimeout(() => setSynced(false), 900);
@@ -99,11 +110,15 @@ export default function App() {
     socket.on("SCORE_UPDATE", onScoreUpdate);
     socket.on("VETO_APPLIED", onVetoApplied);
     socket.on("LOBBY_UPDATE", onLobbyUpdate);
+    socket.on("TIEBREAK_ROUND", onTiebreakRound);
+    socket.on("SESSION_COMPLETE", onSessionComplete);
     return () => {
       socket.off("CATALOGUE_READY", onCatalogueReady);
       socket.off("SCORE_UPDATE", onScoreUpdate);
       socket.off("VETO_APPLIED", onVetoApplied);
       socket.off("LOBBY_UPDATE", onLobbyUpdate);
+      socket.off("TIEBREAK_ROUND", onTiebreakRound);
+      socket.off("SESSION_COMPLETE", onSessionComplete);
     };
   }, []);
 
@@ -115,11 +130,14 @@ export default function App() {
     setSession(EMPTY_SESSION);
     setFilteredArray([]);
     setMyVotedIds([]);
+    setTiebreakIds([]);
+    setTieInfo({ tie: false, tiedMovieIds: [] });
     setScreen("join_create");
   }
 
   function handleSwipeAgain() {
     setMyVotedIds([]); // fresh replay, not a reconnect resume - don't skip anything
+    setTieInfo({ tie: false, tiedMovieIds: [] });
     setScreen("swipe"); // SwipeDeck remounts, its local index resets to 0
   }
 
@@ -169,11 +187,20 @@ export default function App() {
             onAdjustFilters={() => setScreen("lobby")}
           />
         )}
+        {screen === "tiebreak" && (
+          <TiebreakDeck
+            session={session}
+            tiedMovies={Filtered_Array.filter((m) => tiebreakIds.includes(m.id))}
+            synced={synced}
+            onLeave={handleLeave}
+          />
+        )}
         {screen === "results" && (
           <ResultsDashboard
             session={session}
             Filtered_Array={Filtered_Array}
             synced={synced}
+            tieInfo={tieInfo}
             onSwipeAgain={handleSwipeAgain}
             onLeave={handleLeave}
           />
