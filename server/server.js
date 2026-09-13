@@ -275,6 +275,9 @@ io.on("connection", (socket) => {
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 4000;
-initCatalogue().then(() => {
-  server.listen(PORT, () => console.log(`PlotTwist server listening on :${PORT}`));
-});
+server.listen(PORT, () => console.log(`PlotTwist server listening on :${PORT}`));
+
+// Catalogue loading happens in the background so a large TMDB fetch never
+// delays the server coming online - the app is immediately usable with the
+// seed catalogue, then swaps to real TMDB data as soon as it's ready.
+initCatalogue();

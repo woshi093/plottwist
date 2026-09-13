@@ -45,35 +45,64 @@ function randomPlatforms() {
   return shuffled.slice(0, count);
 }
 
-async function buildCatalogueFromTMDB(count = 150) {
+async function fetchDetailsInBatches(candidates, batchSize = 25) {
+  const results = [];
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const batch = candidates.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map((m) => fetchJson(`${BASE}/movie/${m.id}`).catch(() => null))
+    );
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+async function buildCatalogueFromTMDB(count = 300) {
   if (!TMDB_KEY) {
     throw new Error("TMDB_API_KEY is not set");
   }
 
-  // Step 1: get enough popular, reasonably well-known titles. TMDB's
-  // discover endpoint returns ~20 results per page, and a handful of those
-  // get filtered out below (missing runtime or poster), so pull extra pages
-  // until we have a comfortable buffer.
-  const pagesNeeded = Math.max(1, Math.ceil((count * 1.4) / 20));
+  // Step 1: pull from a spread of genres (not just overall popularity) so a
+  // large catalogue still has good variety - a pure "most popular" sort
+  // skews heavily toward action/adventure blockbusters, which would starve
+  // the genre filter in the room lobby of options like Horror or Documentary.
+  const GENRE_IDS = {
+    Action: 28, Adventure: 12, Animation: 16, Comedy: 35, Crime: 80,
+    Documentary: 99, Drama: 18, Family: 10751, Fantasy: 14, Horror: 27,
+    Mystery: 9648, Romance: 10749, "Science Fiction": 878, Thriller: 53,
+  };
+  const genreNames = Object.keys(GENRE_IDS);
+  const pagesPerGenre = Math.max(1, Math.ceil((count / genreNames.length / 20) * 1.3));
+
   const pageResults = await Promise.all(
-    Array.from({ length: pagesNeeded }, (_, i) =>
-      fetchJson(
-        `${BASE}/discover/movie?sort_by=popularity.desc&vote_count.gte=200&include_adult=false&page=${i + 1}`
-      ).catch(() => ({ results: [] }))
+    genreNames.flatMap((name) =>
+      Array.from({ length: pagesPerGenre }, (_, i) =>
+        fetchJson(
+          `${BASE}/discover/movie?sort_by=popularity.desc&vote_count.gte=200&include_adult=false&with_genres=${GENRE_IDS[name]}&page=${i + 1}`
+        ).catch(() => ({ results: [] }))
+      )
     )
   );
-  const candidates = pageResults
-    .flatMap((p) => p.results || [])
-    .slice(0, Math.ceil(count * 1.4));
+
+  // De-duplicate (many movies have multiple genres and will show up more than once).
+  const seen = new Set();
+  const candidates = [];
+  for (const page of pageResults) {
+    for (const m of page.results || []) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        candidates.push(m);
+      }
+    }
+  }
   if (candidates.length === 0) {
     throw new Error("TMDB discover returned no candidates");
   }
 
   // Step 2: TMDB's list endpoints don't include runtime, so fetch full
-  // details per title (this is the standard way to get runtime + genre names).
-  const detailed = await Promise.all(
-    candidates.map((m) => fetchJson(`${BASE}/movie/${m.id}`).catch(() => null))
-  );
+  // details per title - in small batches so we don't fire hundreds of
+  // requests at TMDB simultaneously.
+  const detailed = await fetchDetailsInBatches(candidates.slice(0, Math.ceil(count * 1.3)));
 
   const Master_Catalogue = detailed
     .filter((d) => d && d.runtime && d.poster_path)
