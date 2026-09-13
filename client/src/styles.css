@@ -466,6 +466,54 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.btn_expand_description {
+  display: block;
+  margin-top: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn_expand_description:hover { text-decoration: underline; }
+
+/* ---- Movie info modal (expanded description) ---- */
+.modal_info_backdrop {
+  position: fixed; inset: 0; z-index: 30; background: rgba(5,5,15,0.65);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.modal_info {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  max-width: 360px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.modal_info_poster {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  max-height: 280px;
+  background-size: cover;
+  background-position: center top;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.modal_info_body { padding: 18px 20px 20px; }
+.modal_info_body h3 {
+  margin: 0 0 4px;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 19px;
+  color: var(--text);
+}
+.modal_info_description {
+  font-size: 13.5px;
+  color: rgba(245,241,232,0.85);
+  line-height: 1.5;
+  margin: 10px 0 16px;
+}
 .card_genre_row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .card_genre_tag {
   font-size: 10px;
@@ -563,6 +611,48 @@ body {
 .btn_veto_cancel { background: transparent; flex: 1; }
 
 /* ---- Results ---- */
+.winner_hero_card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  height: 230px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-shadow: 0 16px 36px rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  animation: card_enter 260ms ease-out;
+}
+.winner_hero_scrim {
+  position: relative;
+  z-index: 1;
+  padding: 16px 18px 18px;
+  background: linear-gradient(to top, rgba(6,6,16,0.95) 15%, rgba(6,6,16,0.65) 55%, rgba(6,6,16,0) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.winner_hero_badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #241704;
+  background: var(--gold);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 6px;
+}
+.winner_hero_title {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+.winner_hero_meta { font-size: 12px; color: var(--text-secondary); margin: 0; }
+.winner_hero_score { font-size: 13px; font-weight: 700; color: var(--gold); margin-top: 4px; }
+
 .list_results_ranked { display: flex; flex-direction: column; gap: 8px; }
 .result_row {
   display: flex; justify-content: space-between; align-items: center;
@@ -570,10 +660,9 @@ body {
   border: 1px solid var(--border);
   background: rgba(245, 241, 232, 0.03);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 10px 14px;
 }
 .result_row.excluded { opacity: 0.45; text-decoration: line-through; }
-.result_row.top { border-color: var(--gold-dim); background: rgba(255, 182, 72, 0.08); }
 .result_rank_badge {
   width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -585,7 +674,25 @@ body {
 .result_rank_badge.gold { background: #FFB648; color: #241704; }
 .result_rank_badge.silver { background: #C7C4D6; color: #241704; }
 .result_rank_badge.bronze { background: #C88A4E; color: #241704; }
-.result_title_row { display: flex; align-items: center; gap: 10px; }
+.result_title_row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.result_title_text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result_thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background-size: cover;
+  background-position: center top;
+  flex-shrink: 0;
+  background-color: var(--surface-sunken);
+}
+.result_thumb_emoji {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
 
 .results_actions { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 

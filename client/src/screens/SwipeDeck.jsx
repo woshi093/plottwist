@@ -14,6 +14,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
   });
   const [showVetoModal, setShowVetoModal] = useState(false);
   const [showParty, setShowParty] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [vetoError, setVetoError] = useState("");
 
   // Drag + animation state
@@ -22,6 +23,23 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
   const pointerStart = useRef(null);
 
   const current = active[index];
+
+  // ---- Preload upcoming posters so there's no blank flash while swiping ----
+  // Without this, the browser only starts downloading a poster once that
+  // card becomes "current", which is exactly when the user is looking at it.
+  // Fetching the next few in the background means they're already cached by
+  // the time each card actually appears.
+  useEffect(() => {
+    const PRELOAD_AHEAD = 3;
+    for (let i = index; i < Math.min(index + PRELOAD_AHEAD, active.length); i++) {
+      const url = active[i]?.posterUrl;
+      if (url) {
+        const img = new window.Image();
+        img.src = url;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, active.length]);
 
   function advanceIndex() {
     setVetoError("");
@@ -85,7 +103,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
   // ---- Keyboard support: Left = Pass, Right = Like, Down = Veto ----
   useEffect(() => {
     function onKeyDown(e) {
-      if (showVetoModal || showParty) return; // let overlays own the keyboard while open
+      if (showVetoModal || showParty || showInfoModal) return; // let overlays own the keyboard while open
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         handleSwipe("LEFT");
@@ -99,7 +117,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [current, exitAnim, showVetoModal, showParty]);
+  }, [current, exitAnim, showVetoModal, showParty, showInfoModal]);
 
   // Veto modal keyboard support: Escape = cancel, Enter = confirm
   useEffect(() => {
@@ -242,7 +260,20 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
               {current.duration} min &middot; {current.available_platforms.join(", ")}
             </p>
             {current.description && (
-              <p className="card_movie_description">{current.description}</p>
+              <p className="card_movie_description">
+                {current.description}
+                <button
+                  type="button"
+                  className="btn_expand_description"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowInfoModal(true);
+                  }}
+                >
+                  More
+                </button>
+              </p>
             )}
             {current.genres && current.genres.length > 0 && (
               <div className="card_genre_row">
@@ -286,6 +317,39 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
               </button>
               <button className="btn btn_veto_confirm" onClick={() => resolveVeto(true)}>
                 Confirm veto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInfoModal && (
+        <div
+          className="modal_info_backdrop"
+          onClick={() => setShowInfoModal(false)}
+        >
+          <div className="modal_info" onClick={(e) => e.stopPropagation()}>
+            {current.posterUrl && (
+              <div
+                className="modal_info_poster"
+                style={{ backgroundImage: `url(${current.posterUrl})` }}
+              />
+            )}
+            <div className="modal_info_body">
+              <h3>{current.title}</h3>
+              <p className="card_movie_meta">
+                {current.duration} min &middot; {current.available_platforms.join(", ")}
+              </p>
+              {current.genres && current.genres.length > 0 && (
+                <div className="card_genre_row">
+                  {current.genres.map((g) => (
+                    <span className="card_genre_tag" key={g}>{g}</span>
+                  ))}
+                </div>
+              )}
+              <p className="modal_info_description">{current.description}</p>
+              <button className="btn btn_secondary" onClick={() => setShowInfoModal(false)}>
+                Close
               </button>
             </div>
           </div>

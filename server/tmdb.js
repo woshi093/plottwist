@@ -113,10 +113,7 @@ async function buildCatalogueFromTMDB(count = 1000) {
       duration: d.runtime,
       available_platforms: randomPlatforms(),
       genres: (d.genres || []).slice(0, 2).map((g) => g.name),
-      description:
-        d.overview && d.overview.length > 180
-          ? d.overview.slice(0, 177) + "..."
-          : d.overview || "",
+      description: d.overview ? d.overview.trim() : "",
       poster: "\uD83C\uDFAC", // fallback emoji, unused whenever posterUrl is present
       posterUrl: `${IMG_BASE}${d.poster_path}`,
       gradient: "linear-gradient(160deg, #241E3E, #4B3F82)",
