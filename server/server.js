@@ -69,9 +69,18 @@ function ValidateRoomCode(Input_Code) {
 }
 
 // ---------------------------------------------------------------
-// FilterCatalogue(Max_Duration, Platform_List)
+// FilterCatalogue(Max_Duration, Platform_List, Genre_List, Card_Count)
 // ---------------------------------------------------------------
-function FilterCatalogue(Max_Duration, Platform_List) {
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function FilterCatalogue(Max_Duration, Platform_List, Genre_List, Card_Count) {
   const Filtered_Array = [];
   for (const Movie_Object of Master_Catalogue) {
     const durationOk = Movie_Object.duration <= Max_Duration;
@@ -79,7 +88,11 @@ function FilterCatalogue(Max_Duration, Platform_List) {
       !Platform_List ||
       Platform_List.length === 0 ||
       Movie_Object.available_platforms.some((p) => Platform_List.includes(p));
-    if (durationOk && platformOk) {
+    const genreOk =
+      !Genre_List ||
+      Genre_List.length === 0 ||
+      (Movie_Object.genres || []).some((g) => Genre_List.includes(g));
+    if (durationOk && platformOk && genreOk) {
       Filtered_Array.push({
         ...Movie_Object,
         Current_Score: 0,
@@ -87,7 +100,11 @@ function FilterCatalogue(Max_Duration, Platform_List) {
       });
     }
   }
-  return Filtered_Array;
+  const shuffled = shuffle(Filtered_Array);
+  if (Card_Count && Card_Count > 0) {
+    return shuffled.slice(0, Card_Count);
+  }
+  return shuffled;
 }
 
 // ---------------------------------------------------------------
@@ -159,11 +176,11 @@ io.on("connection", (socket) => {
     BroadcastLiveUpdate(Input_Code, "LOBBY_UPDATE", publicRoomState(room));
   });
 
-  // ---- HostSetFilters(Max_Duration, Platform_List) ----
-  socket.on("host_set_filters", ({ Room_Code, Max_Duration, Platform_List }) => {
+  // ---- HostSetFilters(Max_Duration, Platform_List, Genre_List, Card_Count) ----
+  socket.on("host_set_filters", ({ Room_Code, Max_Duration, Platform_List, Genre_List, Card_Count }) => {
     const room = Active_Session_Table[Room_Code];
     if (!room) return;
-    room.Filtered_Array = FilterCatalogue(Max_Duration, Platform_List);
+    room.Filtered_Array = FilterCatalogue(Max_Duration, Platform_List, Genre_List, Card_Count);
     BroadcastLiveUpdate(Room_Code, "CATALOGUE_READY", room.Filtered_Array);
   });
 

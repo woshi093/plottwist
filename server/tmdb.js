@@ -45,7 +45,7 @@ function randomPlatforms() {
   return shuffled.slice(0, count);
 }
 
-async function buildCatalogueFromTMDB(count = 40) {
+async function buildCatalogueFromTMDB(count = 150) {
   if (!TMDB_KEY) {
     throw new Error("TMDB_API_KEY is not set");
   }
