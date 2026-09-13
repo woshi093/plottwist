@@ -175,6 +175,29 @@ io.on("connection", (socket) => {
       return;
     }
     const room = Active_Session_Table[Input_Code];
+
+    // If this exact browser (same persistent userId) is already in this
+    // room - e.g. a second tab, or re-scanning the same QR code - reclaim
+    // that existing entry instead of pushing a duplicate. Two entries with
+    // the same userId would break every userId-based lookup elsewhere
+    // (veto, swipe, rejoin), since they'd silently collide on whichever
+    // one Array.find() happens to hit first.
+    const existing = room.Session_Active_Array.find((u) => u.userId === userId);
+    if (existing) {
+      existing.socketId = socket.id;
+      existing.disconnectedAt = null;
+      socket.join(Input_Code);
+      cb({
+        success: true,
+        Room_Code: Input_Code,
+        userId,
+        isHost: userId === room.hostUserId,
+        Filtered_Array: room.Filtered_Array,
+      });
+      BroadcastLiveUpdate(Input_Code, "LOBBY_UPDATE", publicRoomState(room));
+      return;
+    }
+
     room.Session_Active_Array.push({
       socketId: socket.id,
       userId,
@@ -227,10 +250,26 @@ io.on("connection", (socket) => {
   });
 
   // ---- HostSetFilters(Max_Duration, Platform_List, Genre_List, Card_Count) ----
-  socket.on("host_set_filters", ({ Room_Code, Max_Duration, Platform_List, Genre_List, Card_Count }) => {
+  socket.on("host_set_filters", ({ Room_Code, Max_Duration, Platform_List, Genre_List, Card_Count }, cb) => {
     const room = Active_Session_Table[Room_Code];
-    if (!room) return;
+    if (!room) {
+      cb && cb({ success: false, message: "Room no longer exists - try leaving and rejoining." });
+      return;
+    }
+    // Guard against wiping real progress: only allow (re)setting the deck if
+    // either nobody has swiped on anything yet, or the current deck is
+    // already empty (e.g. the "Adjust filters" escape hatch after a filter
+    // combo matched zero titles). This stops a host from accidentally
+    // reshuffling a brand new deck out from under a group mid-session.
+    const anyoneHasVoted = room.Session_Active_Array.some(
+      (u) => u.Voted_Movies && Object.keys(u.Voted_Movies).length > 0
+    );
+    if (anyoneHasVoted && room.Filtered_Array.length > 0) {
+      cb && cb({ success: false, message: "Can't change filters mid-session - everyone's already started swiping." });
+      return;
+    }
     room.Filtered_Array = FilterCatalogue(Max_Duration, Platform_List, Genre_List, Card_Count);
+    cb && cb({ success: true });
     BroadcastLiveUpdate(Room_Code, "CATALOGUE_READY", room.Filtered_Array);
   });
 
