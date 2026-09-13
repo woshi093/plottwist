@@ -150,6 +150,11 @@ function checkRoomCompletion(Room_Code) {
   const allFinished =
     room.Session_Active_Array.length > 0 &&
     room.Session_Active_Array.every((u) => u.completion_status === "FINISHED");
+  console.log(
+    `[tiebreak] checkRoomCompletion(${Room_Code}): statuses=`,
+    room.Session_Active_Array.map((u) => `${u.name}:${u.completion_status}`),
+    `allFinished=${allFinished}`
+  );
   if (!allFinished) return;
 
   const active = room.Filtered_Array.filter((m) => m.Movie_Status !== "EXCLUDED");
@@ -169,8 +174,15 @@ function checkRoomCompletion(Room_Code) {
   const tied = ranked.filter(
     (m) => m.Current_Score === top.Current_Score && m.Tiebreak_Score === top.Tiebreak_Score
   );
+  console.log(
+    `[tiebreak] scores=`,
+    ranked.map((m) => `${m.title}:cur=${m.Current_Score},tb=${m.Tiebreak_Score}`),
+    `tiedCount=${tied.length}`,
+    `existingSignature=${room.tiebreakSignature}`
+  );
 
   if (tied.length <= 1) {
+    console.log(`[tiebreak] resolved with a clear winner: ${top.title}`);
     room.activeTiebreakIds = [];
     BroadcastLiveUpdate(Room_Code, "SESSION_COMPLETE", { tie: false, tiedMovieIds: [] });
     return;
@@ -180,11 +192,13 @@ function checkRoomCompletion(Room_Code) {
   if (room.tiebreakSignature === signature) {
     // Already gave this exact set one revote and it's still an exact tie -
     // call it a genuine tie rather than revoting forever.
+    console.log(`[tiebreak] still tied after one revote (signature=${signature}) - genuine tie`);
     room.activeTiebreakIds = [];
     BroadcastLiveUpdate(Room_Code, "SESSION_COMPLETE", { tie: true, tiedMovieIds: tied.map((m) => m.id) });
     return;
   }
 
+  console.log(`[tiebreak] starting a tiebreak round for signature=${signature}`);
   // Start a tiebreak round: clear everyone's vote memory for just these
   // titles (so their next swipe registers as a fresh vote, not a no-op),
   // reset completion so the room can tell when the revote itself is done.
@@ -363,6 +377,9 @@ io.on("connection", (socket) => {
     // scoring "rounds" against each other for titles that were never tied.
     const inTiebreak = room.activeTiebreakIds.includes(movieId);
     const scoreField = inTiebreak ? "Tiebreak_Score" : "Current_Score";
+    if (inTiebreak) {
+      console.log(`[tiebreak] swipe during tiebreak: ${User.name} -> ${Movie_Object.title} (${User_Action})`);
+    }
 
     if (previousVote) {
       // User is changing their mind on this title - undo their old contribution first.
@@ -405,6 +422,7 @@ io.on("connection", (socket) => {
     if (!room) return;
     const User = room.Session_Active_Array.find((u) => u.userId === userId);
     if (User) User.completion_status = "FINISHED";
+    console.log(`[tiebreak] user_finished: ${User ? User.name : userId} in room ${Room_Code}`);
     BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
     checkRoomCompletion(Room_Code);
   });
