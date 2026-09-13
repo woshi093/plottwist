@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { socket } from "../socket.js";
 import { getPersistentUserId } from "../identity.js";
 import { useServerWaking } from "../useServerWaking.js";
@@ -10,6 +10,18 @@ export default function JoinCreateRoom({ onJoined }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const waking = useServerWaking();
+
+  // If this page was opened from the lobby's QR code (?room=1234), jump
+  // straight to the Join form with the code already filled in, instead of
+  // silently ignoring the whole reason someone scanned it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get("room");
+    if (roomParam && /^\d{4}$/.test(roomParam)) {
+      setMode("join");
+      setCode(roomParam);
+    }
+  }, []);
 
   function handleCreate() {
     setLoading(true);
