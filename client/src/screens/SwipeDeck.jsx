@@ -6,12 +6,19 @@ const VETO_THRESHOLD_Y = 90;
 const EXIT_DURATION = 260;
 
 export default function SwipeDeck({ session, Filtered_Array, synced, onFinished, onLeave, resumeVotedIds, onAdjustFilters }) {
-  const active = Filtered_Array.filter((m) => m.Movie_Status !== "EXCLUDED");
-  const [index, setIndex] = useState(() => {
-    if (!resumeVotedIds || resumeVotedIds.length === 0) return 0;
-    const firstUnvoted = active.findIndex((m) => !resumeVotedIds.includes(m.id));
-    return firstUnvoted === -1 ? active.length : firstUnvoted;
-  });
+  // Stable viewing order, captured once when this deck starts (either a
+  // fresh game or a resumed one after reconnect). This never changes for
+  // the lifetime of this component, even as movies get vetoed out from
+  // under it - that's the key fix: navigation is driven by "which movie
+  // IDs have I already decided on", not by a numeric position into a list
+  // that can shrink out from under that number at any moment.
+  const orderRef = useRef(Filtered_Array.map((m) => m.id));
+
+  // IDs the user has already moved past - by swiping, or because their
+  // own veto just removed the card they were looking at. Seeded from
+  // resumeVotedIds on a genuine reconnect resume; empty for a fresh deck.
+  const [passedIds, setPassedIds] = useState(() => resumeVotedIds || []);
+
   const [showVetoModal, setShowVetoModal] = useState(false);
   const [showParty, setShowParty] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -22,7 +29,13 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
   const [exitAnim, setExitAnim] = useState(null); // "left" | "right" | "down" | null
   const pointerStart = useRef(null);
 
-  const current = active[index];
+  // Titles still eligible, in the original stable order - a veto shrinks
+  // this list (correctly), but never renumbers anyone's already-shown card.
+  const remaining = orderRef.current
+    .map((id) => Filtered_Array.find((m) => m.id === id))
+    .filter((m) => m && m.Movie_Status !== "EXCLUDED");
+  const current = remaining.find((m) => !passedIds.includes(m.id));
+  const currentPosition = current ? remaining.findIndex((m) => m.id === current.id) + 1 : remaining.length;
 
   // ---- Preload upcoming posters so there's no blank flash while swiping ----
   // Without this, the browser only starts downloading a poster once that
@@ -30,25 +43,31 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
   // Fetching the next few in the background means they're already cached by
   // the time each card actually appears.
   useEffect(() => {
+    if (!current) return;
     const PRELOAD_AHEAD = 3;
-    for (let i = index; i < Math.min(index + PRELOAD_AHEAD, active.length); i++) {
-      const url = active[i]?.posterUrl;
+    const startAt = remaining.findIndex((m) => m.id === current.id);
+    for (let i = startAt; i < Math.min(startAt + PRELOAD_AHEAD, remaining.length); i++) {
+      const url = remaining[i]?.posterUrl;
       if (url) {
         const img = new window.Image();
         img.src = url;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, active.length]);
+  }, [current?.id, remaining.length]);
 
   function advanceIndex() {
     setVetoError("");
-    if (index + 1 >= active.length) {
-      socket.emit("user_finished", { Room_Code: session.Room_Code, userId: session.userId });
-      onFinished();
-    } else {
-      setIndex(index + 1);
-    }
+    const justShownId = current.id;
+    setPassedIds((prev) => {
+      const next = [...prev, justShownId];
+      const anyLeft = remaining.some((m) => !next.includes(m.id));
+      if (!anyLeft) {
+        socket.emit("user_finished", { Room_Code: session.Room_Code, userId: session.userId });
+        onFinished();
+      }
+      return next;
+    });
   }
 
   // Plays the fly-off animation, THEN commits the actual swipe/veto logic
@@ -301,7 +320,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
       </div>
 
       <p className="screen_subtitle" style={{ textAlign: "center" }}>
-        {index + 1} of {active.length} &middot; drag, tap, or press &larr; / &rarr; / &darr;
+        {currentPosition} of {remaining.length} &middot; drag, tap, or press &larr; / &rarr; / &darr;
       </p>
 
       {showVetoModal && (
