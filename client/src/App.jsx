@@ -119,6 +119,7 @@ export default function App() {
   }
 
   function handleSwipeAgain() {
+    setMyVotedIds([]); // fresh replay, not a reconnect resume - don't skip anything
     setScreen("swipe"); // SwipeDeck remounts, its local index resets to 0
   }
 
