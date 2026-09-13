@@ -1,13 +1,24 @@
 import React, { useState } from "react";
 
-export default function ResultsDashboard({ session, Filtered_Array, synced, onSwipeAgain, onLeave }) {
+export default function ResultsDashboard({ session, Filtered_Array, synced, tieInfo, onSwipeAgain, onLeave }) {
   const [showParty, setShowParty] = useState(false);
-  const sorted = [...Filtered_Array].sort((a, b) => b.Current_Score - a.Current_Score);
-  const winner = sorted.find((m) => m.Movie_Status !== "EXCLUDED");
-  const rest = sorted.filter((m) => m.id !== winner?.id);
+
+  // Sort by Current_Score first, Tiebreak_Score as the secondary key - the
+  // same rule the server uses, so a title that's been through a revote is
+  // ranked on that revote's result rather than the original tied score.
+  const sorted = [...Filtered_Array].sort(
+    (a, b) => b.Current_Score - a.Current_Score || b.Tiebreak_Score - a.Tiebreak_Score
+  );
+
+  const isGenuineTie = !!(tieInfo && tieInfo.tie && tieInfo.tiedMovieIds.length > 1);
+  const coWinners = isGenuineTie ? sorted.filter((m) => tieInfo.tiedMovieIds.includes(m.id)) : [];
+  const winner = !isGenuineTie ? sorted.find((m) => m.Movie_Status !== "EXCLUDED") : null;
+  const rest = sorted.filter((m) =>
+    isGenuineTie ? !tieInfo.tiedMovieIds.includes(m.id) : m.id !== winner?.id
+  );
   const rankBadge = ["gold", "silver", "bronze"];
 
-  let rank = winner ? 1 : 0;
+  let rank = isGenuineTie ? coWinners.length : winner ? 1 : 0;
 
   return (
     <div className="screen">
@@ -23,29 +34,54 @@ export default function ResultsDashboard({ session, Filtered_Array, synced, onSw
         <button className="btn_leave_room" onClick={onLeave}>Leave</button>
       </div>
 
-      <h1 className="screen_title">Results</h1>
+      <h1 className="screen_title">{isGenuineTie ? "It's a tie!" : "Results"}</h1>
+      {isGenuineTie && (
+        <p className="screen_subtitle" style={{ marginTop: -8 }}>
+          Even the tiebreak revote came out even - {coWinners.length} titles are sharing first place.
+        </p>
+      )}
 
-      {winner && (
-        <div
-          className="winner_hero_card"
-          style={{
-            background: winner.posterUrl
-              ? `url(${winner.posterUrl}) center top/cover`
-              : winner.gradient,
-          }}
-        >
-          <div className="winner_hero_scrim">
-            <span className="winner_hero_badge">&#127942; Winner</span>
-            <p className="winner_hero_title">
-              {!winner.posterUrl && winner.poster ? winner.poster + " " : ""}
-              {winner.title}
-            </p>
-            <p className="winner_hero_meta">
-              {winner.duration} min &middot; {winner.available_platforms.join(", ")}
-            </p>
-            <span className="winner_hero_score">Score: {winner.Current_Score}</span>
-          </div>
+      {isGenuineTie ? (
+        <div className="tie_winners_row">
+          {coWinners.map((m) => (
+            <div
+              key={m.id}
+              className="winner_hero_card winner_hero_card_tied"
+              style={{ background: m.posterUrl ? `url(${m.posterUrl}) center top/cover` : m.gradient }}
+            >
+              <div className="winner_hero_scrim">
+                <span className="winner_hero_badge">&#129309; Tied</span>
+                <p className="winner_hero_title">
+                  {!m.posterUrl && m.poster ? m.poster + " " : ""}
+                  {m.title}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
+      ) : (
+        winner && (
+          <div
+            className="winner_hero_card"
+            style={{
+              background: winner.posterUrl
+                ? `url(${winner.posterUrl}) center top/cover`
+                : winner.gradient,
+            }}
+          >
+            <div className="winner_hero_scrim">
+              <span className="winner_hero_badge">&#127942; Winner</span>
+              <p className="winner_hero_title">
+                {!winner.posterUrl && winner.poster ? winner.poster + " " : ""}
+                {winner.title}
+              </p>
+              <p className="winner_hero_meta">
+                {winner.duration} min &middot; {winner.available_platforms.join(", ")}
+              </p>
+              <span className="winner_hero_score">Score: {winner.Current_Score}</span>
+            </div>
+          </div>
+        )
       )}
 
       {rest.length > 0 && (
