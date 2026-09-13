@@ -14,6 +14,7 @@ export default function RoomLobby({ session, synced, onLeave }) {
   const [genres, setGenres] = useState([]);
   const [cardCount, setCardCount] = useState(12);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
 
   function togglePlatform(p) {
     setPlatforms((prev) =>
@@ -29,13 +30,25 @@ export default function RoomLobby({ session, synced, onLeave }) {
 
   function handleStart() {
     setStarting(true);
-    socket.emit("host_set_filters", {
-      Room_Code: session.Room_Code,
-      Max_Duration: maxDuration,
-      Platform_List: platforms,
-      Genre_List: genres,
-      Card_Count: cardCount,
-    });
+    setStartError("");
+    socket.emit(
+      "host_set_filters",
+      {
+        Room_Code: session.Room_Code,
+        Max_Duration: maxDuration,
+        Platform_List: platforms,
+        Genre_List: genres,
+        Card_Count: cardCount,
+      },
+      (res) => {
+        // On success we don't reset `starting` - CATALOGUE_READY arriving
+        // moves the whole screen away from the lobby a moment later anyway.
+        if (!res || !res.success) {
+          setStarting(false);
+          setStartError((res && res.message) || "Something went wrong starting the session - try again.");
+        }
+      }
+    );
   }
 
   return (
@@ -150,6 +163,7 @@ export default function RoomLobby({ session, synced, onLeave }) {
           {platforms.length === 0 && (
             <p className="lbl_veto_error">Select at least one platform.</p>
           )}
+          {startError && <p className="lbl_veto_error">{startError}</p>}
         </>
       ) : (
         <p className="screen_subtitle">Waiting for the host to set filters and start the session...</p>
