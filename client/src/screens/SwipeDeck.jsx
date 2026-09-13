@@ -279,8 +279,8 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
               {current.duration} min &middot; {current.available_platforms.join(", ")}
             </p>
             {current.description && (
-              <p className="card_movie_description">
-                {current.description}
+              <>
+                <p className="card_movie_description">{current.description}</p>
                 <button
                   type="button"
                   className="btn_expand_description"
@@ -292,7 +292,7 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
                 >
                   More
                 </button>
-              </p>
+              </>
             )}
             {current.genres && current.genres.length > 0 && (
               <div className="card_genre_row">
