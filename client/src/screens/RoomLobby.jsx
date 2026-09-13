@@ -52,6 +52,22 @@ export default function RoomLobby({ session, synced, onLeave }) {
       <p className="screen_subtitle" style={{ marginBottom: -4 }}>Room code</p>
       <p className="lbl_room_code">{session.Room_Code}</p>
 
+      <div className="qr_code_wrap">
+        <img
+          className="qr_code_img"
+          alt={`QR code for room ${session.Room_Code}`}
+          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(
+            `${window.location.origin}?room=${session.Room_Code}`
+          )}`}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+        <p className="screen_subtitle" style={{ margin: "6px 0 0" }}>
+          Scan to join, or share the code above
+        </p>
+      </div>
+
       <div className="lobby_user_list">
         {session.Session_Active_Array.map((u) => (
           <div className="lobby_user_row" key={u.userId}>

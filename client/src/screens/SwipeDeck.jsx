@@ -5,9 +5,13 @@ const SWIPE_THRESHOLD_X = 100;
 const VETO_THRESHOLD_Y = 90;
 const EXIT_DURATION = 260;
 
-export default function SwipeDeck({ session, Filtered_Array, synced, onFinished, onLeave }) {
+export default function SwipeDeck({ session, Filtered_Array, synced, onFinished, onLeave, resumeVotedIds, onAdjustFilters }) {
   const active = Filtered_Array.filter((m) => m.Movie_Status !== "EXCLUDED");
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => {
+    if (!resumeVotedIds || resumeVotedIds.length === 0) return 0;
+    const firstUnvoted = active.findIndex((m) => !resumeVotedIds.includes(m.id));
+    return firstUnvoted === -1 ? active.length : firstUnvoted;
+  });
   const [showVetoModal, setShowVetoModal] = useState(false);
   const [showParty, setShowParty] = useState(false);
   const [vetoError, setVetoError] = useState("");
@@ -178,7 +182,14 @@ export default function SwipeDeck({ session, Filtered_Array, synced, onFinished,
       <div className="screen">
         {topBar}
         <h1 className="screen_title">Swipe deck</h1>
-        <p className="screen_subtitle">No titles match the current filters.</p>
+        <p className="screen_subtitle">
+          No titles match the current filters - try widening the duration, platforms, or genres.
+        </p>
+        {onAdjustFilters && (
+          <button className="btn btn_secondary" onClick={onAdjustFilters}>
+            Adjust filters
+          </button>
+        )}
         {partyPopover}
       </div>
     );

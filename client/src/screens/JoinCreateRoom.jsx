@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { socket } from "../socket.js";
+import { getPersistentUserId } from "../identity.js";
 
 export default function JoinCreateRoom({ onJoined }) {
   const [mode, setMode] = useState(null); // "create" | "join"
@@ -11,7 +12,8 @@ export default function JoinCreateRoom({ onJoined }) {
   function handleCreate() {
     setLoading(true);
     setError("");
-    socket.emit("create_room", { name }, (res) => {
+    const userId = getPersistentUserId();
+    socket.emit("create_room", { name, userId }, (res) => {
       setLoading(false);
       if (res.success) {
         onJoined({
@@ -31,7 +33,8 @@ export default function JoinCreateRoom({ onJoined }) {
     }
     setLoading(true);
     setError("");
-    socket.emit("join_room", { Input_Code: code, name }, (res) => {
+    const userId = getPersistentUserId();
+    socket.emit("join_room", { Input_Code: code, name, userId }, (res) => {
       setLoading(false);
       if (res.success) {
         onJoined({
@@ -48,6 +51,20 @@ export default function JoinCreateRoom({ onJoined }) {
 
   return (
     <div className="screen" style={{ justifyContent: "center", gap: 18 }}>
+      {mode && (
+        <button
+          type="button"
+          className="btn_back"
+          onClick={() => {
+            setMode(null);
+            setError("");
+          }}
+          aria-label="Back"
+        >
+          &#8592; Back
+        </button>
+      )}
+
       <div style={{ textAlign: "center", marginBottom: 8 }}>
         <p className="wordmark">PlotTwist</p>
         <p className="screen_subtitle" style={{ margin: "6px 0 0" }}>

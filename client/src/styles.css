@@ -32,8 +32,15 @@ body {
   background: var(--ink);
 }
 
+.viewport {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+}
+
 .app_shell {
   max-width: 430px;
+  width: 100%;
   margin: 0 auto;
   min-height: 100vh;
   background:
@@ -43,6 +50,124 @@ body {
   flex-direction: column;
   position: relative;
 }
+
+/* ---- Desktop layout: phone-style shell + a persistent live side panel ----
+   This is what actually makes PlotTwist behave differently on a wide
+   screen instead of just stretching the mobile column - a real desktop
+   user gets an always-visible party list and live scoreboard alongside
+   the swipe deck, rather than the mobile "View party" popover. */
+@media (min-width: 900px) {
+  .viewport {
+    align-items: flex-start;
+    justify-content: center;
+    gap: 28px;
+    padding: 48px 24px;
+  }
+  .app_shell {
+    min-height: 760px;
+    height: 760px;
+    border-radius: 32px;
+    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--border-strong);
+    overflow-y: auto;
+  }
+}
+
+.side_panel {
+  display: none;
+}
+@media (min-width: 900px) {
+  .side_panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 360px;
+    height: 760px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 24px 22px;
+  }
+}
+.side_panel_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.side_panel_title {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gold);
+}
+.side_panel_section { display: flex; flex-direction: column; gap: 8px; }
+.side_panel_label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+.side_panel_veto_used {
+  font-size: 10px;
+  color: var(--veto);
+  font-weight: 600;
+}
+.side_panel_scoreboard { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.side_panel_scoreboard_list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.side_panel_score_row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 241, 232, 0.04);
+  font-size: 12.5px;
+}
+.side_panel_score_row.excluded { opacity: 0.4; text-decoration: line-through; }
+.side_panel_score_title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side_panel_score_value { font-weight: 700; color: var(--gold); flex-shrink: 0; }
+
+/* ---- Back button (Join/Create sub-screens) ---- */
+.btn_back {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.btn_back:hover { color: var(--text); }
+
+/* ---- QR code (Lobby) ---- */
+.qr_code_wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px;
+  background: rgba(245, 241, 232, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.qr_code_img {
+  width: 140px;
+  height: 140px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 6px;
+}
+
+.screen { position: relative; }
 
 .screen {
   flex: 1;

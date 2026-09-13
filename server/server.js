@@ -33,8 +33,8 @@ async function initCatalogue() {
 // RoomState = {
 //   Room_Code,
 //   Filtered_Array: [ Movie_Object, ... ],   // Movie_Object.Current_Score / Movie_Status live here
-//   Session_Active_Array: [ { socketId, userId, name, User_Veto_Button, completion_status }, ... ],
-//   hostSocketId
+//   Session_Active_Array: [ { socketId, userId, name, User_Veto_Button, completion_status, Voted_Movies, disconnectedAt }, ... ],
+//   hostUserId   // stable across reconnects, unlike socketId
 // }
 const Active_Session_Table = {};
 
@@ -56,7 +56,7 @@ function GenerateRoomCode() {
     Room_Code,
     Filtered_Array: [],
     Session_Active_Array: [],
-    hostSocketId: null,
+    hostUserId: null,
   };
   return Room_Code;
 }
@@ -124,17 +124,17 @@ function publicRoomState(room) {
       name: u.name,
       User_Veto_Button: u.User_Veto_Button,
       completion_status: u.completion_status,
+      connected: !u.disconnectedAt,
     })),
   };
 }
 
 io.on("connection", (socket) => {
   // ---- Create room (host) ----
-  socket.on("create_room", ({ name }, cb) => {
+  socket.on("create_room", ({ name, userId }, cb) => {
     const Room_Code = GenerateRoomCode();
     const room = Active_Session_Table[Room_Code];
-    room.hostSocketId = socket.id;
-    const userId = socket.id;
+    room.hostUserId = userId;
     room.Session_Active_Array.push({
       socketId: socket.id,
       userId,
@@ -142,6 +142,7 @@ io.on("connection", (socket) => {
       User_Veto_Button: false,
       completion_status: "IN_PROGRESS",
       Voted_Movies: {}, // { [movieId]: "RIGHT" | "LEFT" } - lets a user safely re-swipe (e.g. "Swipe again") without inflating the group score
+      disconnectedAt: null,
     });
     socket.join(Room_Code);
     cb({ success: true, Room_Code, userId, isHost: true });
@@ -149,14 +150,13 @@ io.on("connection", (socket) => {
   });
 
   // ---- Join room ----
-  socket.on("join_room", ({ Input_Code, name }, cb) => {
+  socket.on("join_room", ({ Input_Code, name, userId }, cb) => {
     const isValid = ValidateRoomCode(Input_Code);
     if (!isValid) {
       cb({ success: false, message: "Invalid code, please try again" });
       return;
     }
     const room = Active_Session_Table[Input_Code];
-    const userId = socket.id;
     room.Session_Active_Array.push({
       socketId: socket.id,
       userId,
@@ -164,6 +164,7 @@ io.on("connection", (socket) => {
       User_Veto_Button: false,
       completion_status: "IN_PROGRESS",
       Voted_Movies: {},
+      disconnectedAt: null,
     });
     socket.join(Input_Code);
     cb({
@@ -174,6 +175,37 @@ io.on("connection", (socket) => {
       Filtered_Array: room.Filtered_Array,
     });
     BroadcastLiveUpdate(Input_Code, "LOBBY_UPDATE", publicRoomState(room));
+  });
+
+  // ---- Rejoin room (after a refresh / brief disconnect) ----
+  // Reclaims the same Session_Active_Array entry by userId - a stable id the
+  // client keeps in localStorage, separate from socket.id which changes on
+  // every reconnect - so a refreshed user keeps their veto status, their
+  // votes so far, and their host status instead of appearing as a new guest.
+  socket.on("rejoin_room", ({ Room_Code, userId }, cb) => {
+    const room = Active_Session_Table[Room_Code];
+    if (!room) {
+      cb({ success: false, message: "Room no longer exists" });
+      return;
+    }
+    const User = room.Session_Active_Array.find((u) => u.userId === userId);
+    if (!User) {
+      cb({ success: false, message: "User not found in this room" });
+      return;
+    }
+    User.socketId = socket.id;
+    User.disconnectedAt = null;
+    socket.join(Room_Code);
+    cb({
+      success: true,
+      Room_Code,
+      userId,
+      isHost: userId === room.hostUserId,
+      Filtered_Array: room.Filtered_Array,
+      Voted_Movies: User.Voted_Movies,
+      completion_status: User.completion_status,
+    });
+    BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
   });
 
   // ---- HostSetFilters(Max_Duration, Platform_List, Genre_List, Card_Count) ----
@@ -245,14 +277,26 @@ io.on("connection", (socket) => {
   });
 
   // ---- Leave room (explicit, via the Leave button) ----
+  // An explicit leave is a deliberate exit - remove the user immediately,
+  // unlike a plain disconnect (see below), which gets a reconnect grace period.
   socket.on("leave_room", ({ Room_Code }) => {
     removeSocketFromRoom(socket, Room_Code);
     socket.leave(Room_Code);
   });
 
+  // A plain disconnect (refresh, brief network drop, tab close) doesn't
+  // remove the user outright - it marks them as temporarily away so
+  // rejoin_room can reclaim the same slot (same votes, same veto status)
+  // within RECONNECT_GRACE_MS. cleanupDisconnectedUsers() below does the
+  // actual removal once the grace period has passed.
   socket.on("disconnect", () => {
     for (const Room_Code of Object.keys(Active_Session_Table)) {
-      removeSocketFromRoom(socket, Room_Code);
+      const room = Active_Session_Table[Room_Code];
+      const User = room.Session_Active_Array.find((u) => u.socketId === socket.id);
+      if (User) {
+        User.disconnectedAt = Date.now();
+        BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
+      }
     }
   });
 
@@ -271,6 +315,28 @@ io.on("connection", (socket) => {
     }
   }
 });
+
+// ---------------------------------------------------------------
+// Periodic cleanup: a user who has been disconnected (not explicitly left)
+// for longer than RECONNECT_GRACE_MS is now assumed gone for good and is
+// removed, along with any room that ends up empty as a result.
+// ---------------------------------------------------------------
+const RECONNECT_GRACE_MS = 60_000;
+setInterval(() => {
+  for (const Room_Code of Object.keys(Active_Session_Table)) {
+    const room = Active_Session_Table[Room_Code];
+    const before = room.Session_Active_Array.length;
+    room.Session_Active_Array = room.Session_Active_Array.filter(
+      (u) => !(u.disconnectedAt && Date.now() - u.disconnectedAt > RECONNECT_GRACE_MS)
+    );
+    if (room.Session_Active_Array.length !== before) {
+      BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
+    }
+    if (room.Session_Active_Array.length === 0) {
+      delete Active_Session_Table[Room_Code];
+    }
+  }
+}, 15_000);
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 

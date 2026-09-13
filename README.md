@@ -71,3 +71,39 @@ as a "Static Site", both from a GitHub repo, using a free host like Render. The
 frontend needs one environment variable, `VITE_SERVER_URL`, set to the backend's live
 URL before it's built.
 
+## Using real movie data (TMDB)
+
+By default the app uses a small placeholder catalogue in `server/catalogue.js`
+(emoji "posters", made-up titles). Set a TMDB API key and it automatically switches
+to real, current movies with real posters, descriptions, genres and runtimes -
+no other code changes needed.
+
+**1. Get a free key:** sign up at [themoviedb.org](https://www.themoviedb.org/settings/api)
+and request an API key (either the "API Key (v3 auth)" or the "API Read Access
+Token (v4)" both work - the server auto-detects which one you have).
+
+**2. Running locally:**
+- Copy `server/.env.example` to `server/.env`
+- Paste your key in as `TMDB_API_KEY=...`
+- Run the server as normal (`npm start`) - on startup you'll see either
+  `Loaded 14 titles from TMDB.` or a warning explaining why it fell back to the
+  placeholder catalogue (e.g. an invalid key)
+- `.env` is already git-ignored, so your key will never be uploaded to GitHub
+
+**3. Running on Render:** open your **backend Web Service** (not the frontend
+Static Site) → **Environment** tab → **Add Environment Variable** → Key = `TMDB_API_KEY`,
+Value = your key → save. Render will redeploy the backend automatically. The key
+only needs to be set on the backend, since all TMDB requests happen server-side.
+
+**Notes:**
+- If the key is missing, invalid, or TMDB is unreachable, the app automatically
+  falls back to the placeholder catalogue instead of crashing - check your
+  server's logs (Render → your Web Service → "Logs" tab) if titles look wrong.
+- Movie data is fetched once when the server starts, not on every request.
+- Streaming platforms shown (Netflix/Disney+/Prime Video) are randomly assigned
+  per title, since TMDB's real availability data is region-locked and out of
+  scope for this project - only the poster, title, description, genres and
+  runtime come from TMDB.
+- Per TMDB's terms, the app displays "Movie data provided by TMDB" on the
+  Join/Create screen.
+
