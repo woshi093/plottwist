@@ -75,6 +75,8 @@ function GenerateRoomCode() {
     Filtered_Array: [],
     Session_Active_Array: [],
     hostUserId: null,
+    activeTiebreakIds: [], // movie ids currently in a tiebreak revote, if any
+    tiebreakSignature: null, // the tied id-set already given one revote, to cap it at one attempt
   };
   return Room_Code;
 }
@@ -114,6 +116,7 @@ function FilterCatalogue(Max_Duration, Platform_List, Genre_List, Card_Count) {
       Filtered_Array.push({
         ...Movie_Object,
         Current_Score: 0,
+        Tiebreak_Score: 0, // only used if this title ends up in a tiebreak revote
         Movie_Status: "ACTIVE",
       });
     }
@@ -131,6 +134,70 @@ function FilterCatalogue(Max_Duration, Platform_List, Genre_List, Card_Count) {
 // ---------------------------------------------------------------
 function BroadcastLiveUpdate(Room_Code, Event_Type, Data_Object) {
   io.to(Room_Code).emit(Event_Type, Data_Object);
+}
+
+// ---------------------------------------------------------------
+// checkRoomCompletion(Room_Code) - called whenever a user finishes their
+// deck. Once EVERYONE in the room has finished, decides what happens next:
+// a clear winner (session ends), a tie needing one revote (starts a
+// tiebreak round), or a tie that survived a revote too (ends as a genuine
+// tie, rather than looping forever).
+// ---------------------------------------------------------------
+function checkRoomCompletion(Room_Code) {
+  const room = Active_Session_Table[Room_Code];
+  if (!room) return;
+
+  const allFinished =
+    room.Session_Active_Array.length > 0 &&
+    room.Session_Active_Array.every((u) => u.completion_status === "FINISHED");
+  if (!allFinished) return;
+
+  const active = room.Filtered_Array.filter((m) => m.Movie_Status !== "EXCLUDED");
+  if (active.length === 0) {
+    room.activeTiebreakIds = [];
+    BroadcastLiveUpdate(Room_Code, "SESSION_COMPLETE", { tie: false, tiedMovieIds: [] });
+    return;
+  }
+
+  // Rank by Current_Score first, Tiebreak_Score as the secondary key - a
+  // title that's been through a revote is compared on that revote's result,
+  // not on the original score that got it into the tiebreak in the first place.
+  const ranked = [...active].sort(
+    (a, b) => b.Current_Score - a.Current_Score || b.Tiebreak_Score - a.Tiebreak_Score
+  );
+  const top = ranked[0];
+  const tied = ranked.filter(
+    (m) => m.Current_Score === top.Current_Score && m.Tiebreak_Score === top.Tiebreak_Score
+  );
+
+  if (tied.length <= 1) {
+    room.activeTiebreakIds = [];
+    BroadcastLiveUpdate(Room_Code, "SESSION_COMPLETE", { tie: false, tiedMovieIds: [] });
+    return;
+  }
+
+  const signature = tied.map((m) => m.id).sort().join(",");
+  if (room.tiebreakSignature === signature) {
+    // Already gave this exact set one revote and it's still an exact tie -
+    // call it a genuine tie rather than revoting forever.
+    room.activeTiebreakIds = [];
+    BroadcastLiveUpdate(Room_Code, "SESSION_COMPLETE", { tie: true, tiedMovieIds: tied.map((m) => m.id) });
+    return;
+  }
+
+  // Start a tiebreak round: clear everyone's vote memory for just these
+  // titles (so their next swipe registers as a fresh vote, not a no-op),
+  // reset completion so the room can tell when the revote itself is done.
+  room.tiebreakSignature = signature;
+  room.activeTiebreakIds = tied.map((m) => m.id);
+  for (const u of room.Session_Active_Array) {
+    for (const id of room.activeTiebreakIds) {
+      delete u.Voted_Movies[id];
+    }
+    u.completion_status = "IN_PROGRESS";
+  }
+  BroadcastLiveUpdate(Room_Code, "TIEBREAK_ROUND", { tiedMovieIds: room.activeTiebreakIds });
+  BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
 }
 
 function publicRoomState(room) {
@@ -289,11 +356,19 @@ io.on("connection", (socket) => {
       // Same user, same title, same direction (e.g. after "Swipe again") - no-op.
       return;
     }
+    // During a tiebreak, votes go to a separate Tiebreak_Score rather than
+    // the original Current_Score - this keeps the revote on a clean slate
+    // without disturbing the score that got these titles into the tiebreak
+    // in the first place, and without needing to compare two different
+    // scoring "rounds" against each other for titles that were never tied.
+    const inTiebreak = room.activeTiebreakIds.includes(movieId);
+    const scoreField = inTiebreak ? "Tiebreak_Score" : "Current_Score";
+
     if (previousVote) {
       // User is changing their mind on this title - undo their old contribution first.
-      Movie_Object.Current_Score -= delta(previousVote);
+      Movie_Object[scoreField] -= delta(previousVote);
     }
-    Movie_Object.Current_Score += delta(User_Action);
+    Movie_Object[scoreField] += delta(User_Action);
     User.Voted_Movies[movieId] = User_Action;
 
     BroadcastLiveUpdate(Room_Code, "SCORE_UPDATE", Movie_Object);
@@ -331,6 +406,7 @@ io.on("connection", (socket) => {
     const User = room.Session_Active_Array.find((u) => u.userId === userId);
     if (User) User.completion_status = "FINISHED";
     BroadcastLiveUpdate(Room_Code, "LOBBY_UPDATE", publicRoomState(room));
+    checkRoomCompletion(Room_Code);
   });
 
   // ---- Leave room (explicit, via the Leave button) ----
@@ -369,6 +445,11 @@ io.on("connection", (socket) => {
     }
     if (room.Session_Active_Array.length === 0) {
       delete Active_Session_Table[Room_Code];
+    } else {
+      // If the person who just left was the only one still mid-tiebreak,
+      // everyone else left waiting needs this to be re-checked - otherwise
+      // they'd wait forever for someone who's no longer coming back.
+      checkRoomCompletion(Room_Code);
     }
   }
 });
@@ -391,6 +472,8 @@ setInterval(() => {
     }
     if (room.Session_Active_Array.length === 0) {
       delete Active_Session_Table[Room_Code];
+    } else if (room.Session_Active_Array.length !== before) {
+      checkRoomCompletion(Room_Code); // same reasoning as removeSocketFromRoom above
     }
   }
 }, 15_000);
