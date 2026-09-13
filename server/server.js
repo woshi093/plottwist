@@ -76,7 +76,7 @@ function GenerateRoomCode() {
     Session_Active_Array: [],
     hostUserId: null,
     activeTiebreakIds: [], // movie ids currently in a tiebreak revote, if any
-    tiebreakSignature: null, // the tied id-set already given one revote, to cap it at one attempt
+    hasHadTiebreak: false, // caps the whole session at one revote round, ever
   };
   return Room_Code;
 }
@@ -178,7 +178,7 @@ function checkRoomCompletion(Room_Code) {
     `[tiebreak] scores=`,
     ranked.map((m) => `${m.title}:cur=${m.Current_Score},tb=${m.Tiebreak_Score}`),
     `tiedCount=${tied.length}`,
-    `existingSignature=${room.tiebreakSignature}`
+    `hasHadTiebreak=${room.hasHadTiebreak}`
   );
 
   if (tied.length <= 1) {
@@ -188,21 +188,20 @@ function checkRoomCompletion(Room_Code) {
     return;
   }
 
-  const signature = tied.map((m) => m.id).sort().join(",");
-  if (room.tiebreakSignature === signature) {
-    // Already gave this exact set one revote and it's still an exact tie -
-    // call it a genuine tie rather than revoting forever.
-    console.log(`[tiebreak] still tied after one revote (signature=${signature}) - genuine tie`);
+  if (room.hasHadTiebreak) {
+    // This session already had its one revote round - whatever's still tied
+    // now (even if it's a smaller group than the original tie) is final.
+    console.log(`[tiebreak] already had a revote this session - calling it a genuine tie`);
     room.activeTiebreakIds = [];
     BroadcastLiveUpdate(Room_Code, "SESSION_COMPLETE", { tie: true, tiedMovieIds: tied.map((m) => m.id) });
     return;
   }
 
-  console.log(`[tiebreak] starting a tiebreak round for signature=${signature}`);
-  // Start a tiebreak round: clear everyone's vote memory for just these
+  console.log(`[tiebreak] starting the one-and-only tiebreak round`);
+  // Start the tiebreak round: clear everyone's vote memory for just these
   // titles (so their next swipe registers as a fresh vote, not a no-op),
   // reset completion so the room can tell when the revote itself is done.
-  room.tiebreakSignature = signature;
+  room.hasHadTiebreak = true;
   room.activeTiebreakIds = tied.map((m) => m.id);
   for (const u of room.Session_Active_Array) {
     for (const id of room.activeTiebreakIds) {
