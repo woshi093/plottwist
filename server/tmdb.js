@@ -57,7 +57,7 @@ async function fetchDetailsInBatches(candidates, batchSize = 25) {
   return results;
 }
 
-async function buildCatalogueFromTMDB(count = 300) {
+async function buildCatalogueFromTMDB(count = 1000) {
   if (!TMDB_KEY) {
     throw new Error("TMDB_API_KEY is not set");
   }

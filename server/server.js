@@ -2,6 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const { Server } = require("socket.io");
 const { Master_Catalogue: SEED_CATALOGUE } = require("./catalogue");
 const { buildCatalogueFromTMDB } = require("./tmdb");
@@ -13,16 +15,32 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// Master_Catalogue starts as the static seed list, and is replaced with real
-// TMDB data at startup if TMDB_API_KEY is set and the request succeeds.
-// FilterCatalogue() below reads this variable by reference, so the
-// replacement takes effect automatically once initCatalogue() resolves.
+// Master_Catalogue is decided in this priority order:
+//   1. A locally-generated, git-committed cache file (instant, no API call,
+//      works even if TMDB is down) - see server/scripts/build_catalogue_cache.js
+//   2. A live TMDB fetch, if no cache file exists but TMDB_API_KEY is set
+//   3. The static seed list in catalogue.js, as a last resort
+// FilterCatalogue() below reads this variable by reference, so whichever
+// source wins takes effect automatically once initCatalogue() resolves.
 let Master_Catalogue = SEED_CATALOGUE;
+const CATALOGUE_CACHE_PATH = path.join(__dirname, "catalogue_tmdb_cache.json");
 
 async function initCatalogue() {
+  if (fs.existsSync(CATALOGUE_CACHE_PATH)) {
+    try {
+      const cached = JSON.parse(fs.readFileSync(CATALOGUE_CACHE_PATH, "utf8"));
+      if (Array.isArray(cached) && cached.length > 0) {
+        Master_Catalogue = cached;
+        console.log(`Loaded ${Master_Catalogue.length} titles from the cached catalogue file (instant, no TMDB call).`);
+        return;
+      }
+    } catch (err) {
+      console.warn(`Cached catalogue file unreadable (${err.message}) - falling back to a live TMDB fetch.`);
+    }
+  }
   try {
     Master_Catalogue = await buildCatalogueFromTMDB();
-    console.log(`Loaded ${Master_Catalogue.length} titles from TMDB.`);
+    console.log(`Loaded ${Master_Catalogue.length} titles from a live TMDB fetch.`);
   } catch (err) {
     console.warn(`TMDB catalogue unavailable (${err.message}) - using the built-in seed catalogue instead.`);
     Master_Catalogue = SEED_CATALOGUE;

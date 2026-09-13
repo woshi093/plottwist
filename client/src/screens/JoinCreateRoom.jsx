@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { socket } from "../socket.js";
 import { getPersistentUserId } from "../identity.js";
+import { useServerWaking } from "../useServerWaking.js";
 
 export default function JoinCreateRoom({ onJoined }) {
   const [mode, setMode] = useState(null); // "create" | "join"
@@ -8,6 +9,7 @@ export default function JoinCreateRoom({ onJoined }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const waking = useServerWaking();
 
   function handleCreate() {
     setLoading(true);
@@ -71,6 +73,14 @@ export default function JoinCreateRoom({ onJoined }) {
           Pick something together, tonight.
         </p>
       </div>
+
+      {waking && (
+        <div className="banner_waking">
+          <span className="banner_waking_dot" />
+          Waking up the server - this can take up to a minute if no one's used
+          PlotTwist in a while.
+        </div>
+      )}
 
       <input
         className="txt_name_input"

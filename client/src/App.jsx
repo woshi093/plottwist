@@ -6,6 +6,7 @@ import SwipeDeck from "./screens/SwipeDeck.jsx";
 import ResultsDashboard from "./screens/ResultsDashboard.jsx";
 import SidePanel from "./screens/SidePanel.jsx";
 import { useIsDesktop } from "./useIsDesktop.js";
+import { useServerWaking } from "./useServerWaking.js";
 import { getPersistentUserId, saveLastRoom, getLastRoom, clearLastRoom } from "./identity.js";
 
 const EMPTY_SESSION = {
@@ -24,6 +25,7 @@ export default function App() {
   const [synced, setSynced] = useState(false);
   const [myVotedIds, setMyVotedIds] = useState([]);
   const isDesktop = useIsDesktop();
+  const waking = useServerWaking();
 
   // ---- Attempt a silent rejoin on load (refresh / brief disconnect) ----
   useEffect(() => {
@@ -127,6 +129,13 @@ export default function App() {
           <div className="screen" style={{ justifyContent: "center", alignItems: "center" }}>
             <p className="wordmark">PlotTwist</p>
             <p className="screen_subtitle">Reconnecting...</p>
+            {waking && (
+              <div className="banner_waking">
+                <span className="banner_waking_dot" />
+                Waking up the server - this can take up to a minute if no one's
+                used PlotTwist in a while.
+              </div>
+            )}
           </div>
         )}
         {screen === "join_create" && (
