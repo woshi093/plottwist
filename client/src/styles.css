@@ -73,6 +73,32 @@ body {
   }
 }
 
+/* ---- Shared slim scrollbar, used anywhere content can overflow - replaces
+   the default OS scrollbar (with its up/down arrow buttons) with a slim,
+   borderless thumb that matches the dark theme instead of clashing with it. ---- */
+.app_shell, .side_panel_scoreboard_list, .modal_info {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(245, 241, 232, 0.18) transparent;
+}
+.app_shell::-webkit-scrollbar,
+.side_panel_scoreboard_list::-webkit-scrollbar,
+.modal_info::-webkit-scrollbar { width: 6px; }
+.app_shell::-webkit-scrollbar-track,
+.side_panel_scoreboard_list::-webkit-scrollbar-track,
+.modal_info::-webkit-scrollbar-track { background: transparent; }
+.app_shell::-webkit-scrollbar-thumb,
+.side_panel_scoreboard_list::-webkit-scrollbar-thumb,
+.modal_info::-webkit-scrollbar-thumb {
+  background: rgba(245, 241, 232, 0.18);
+  border-radius: 999px;
+}
+.app_shell::-webkit-scrollbar-thumb:hover,
+.side_panel_scoreboard_list::-webkit-scrollbar-thumb:hover,
+.modal_info::-webkit-scrollbar-thumb:hover { background: rgba(245, 241, 232, 0.32); }
+.app_shell::-webkit-scrollbar-button,
+.side_panel_scoreboard_list::-webkit-scrollbar-button,
+.modal_info::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+
 .side_panel {
   display: none;
 }
